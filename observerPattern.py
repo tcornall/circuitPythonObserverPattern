@@ -1,6 +1,5 @@
-import time
-import random
-import digitalio, board
+import time, random, digitalio, board,touchio
+from adafruit_debouncer import Debouncer
 """
 Observable class that checks for events and handles observers registering/deregistering
 #and notifications.
@@ -28,7 +27,7 @@ class Observable():
             else:
                 return False
         else:
-            return False
+            return False  #if no checkFunc defined, return False
 
     def register(self, observer):
         self._observers.append(observer)
@@ -41,7 +40,7 @@ class Observable():
         for observer in self._observers:
             observer.notify(self.name, **self.kwargs) #send the name and the repacked args and kwargs
 
-#make an Observable where the event is elapsed time. It repeats by default.
+#make an Observable where the event is elapsed time. It repeats by default, i.e is periodic
 #period is in ms and has been tested down to 1 ms OK.
 class TimerObservable(Observable):
     def __init__(self, name, *args, **kwargs):
@@ -49,6 +48,7 @@ class TimerObservable(Observable):
         #print(self.period)
         super().__init__(name, *args, **kwargs)
         self.startTime = time.monotonic() * 1000 #remember when you were started
+
     def check(self):  #
         now = time.monotonic() * 1000
         if now - self.startTime >= self.period: #time elapsed yet?
@@ -58,13 +58,42 @@ class TimerObservable(Observable):
         else:
             return False
 
+"""
+make an Observable where the event is an object with a 'value' attribute.
+i.e. it remembers the last input and compares the current one
+and check() is true of input.value has just changed from False to True
+If the object is an instance of Debouncer it also does the Debouncer.update()
+"""
+class DebouncedWentTrueObservable(Observable):
+    def __init__(self, name, debouncedPin=None, *args, **kwargs):
+        super().__init__(name, *args, **kwargs)
+        self.debouncedPin = debouncedPin #period is in ms
+        print(self.name, 'debouncedPin=', self.debouncedPin)
+        if debouncedPin is not None:
+            self.lastPin = debouncedPin.value #remember what the pin was
+
+    def check(self):  #
+        if self.debouncedPin is not None:
+            if isinstance(self.debouncedPin, Debouncer):
+                self.debouncedPin.update()    #need to do this for a debounced pin.
+            inp = self.debouncedPin.value #read the pin
+            res = inp and not self.lastPin  #in the pin now True but wasn't last time?
+            self.lastPin = inp #remeber of last time
+            if res:
+                self.notify()  #Tell all your observers
+                return True    #return result
+            else:
+                return False
+        else:
+            return False #if no pin, just say 'No'
+
 class Observer:
     def __init__(self, name, observable):
         observable.register(self)
         self.name = name
 
     def notify(self, observableName, **kwargs): #args and kwargs also
-        #print(self.name, 'Got', 'kwargs=', kwargs, 'From', observableName)
+        print(self.name, 'Got', 'kwargs=', kwargs, 'From', observableName)
         led = kwargs.pop('led')
         led.value = not led.value #can't print fast enough to keep up! so turn print off and flash instead
 
@@ -72,20 +101,23 @@ class Observer:
 def demoLoop():
     led = digitalio.DigitalInOut(board.D13)
     led.direction = digitalio.Direction.OUTPUT
-    touchPin = board.A0
+    touchA0 = touchio.TouchIn(board.A0)  #built-in capacitive sensor. needs no external h/w except 1MOhm pulldown
+    touchSwA0=Debouncer(touchA0)
 
-    testObservable = Observable('testObservable', lambda: random.randint(0,100) < 1,\
-                   'something has happened', 'call me', 12345, event='random', reason='Dunno', led = led) #an observer with a random check
-    testTimer = TimerObservable('testTimer',period=1, led = led); #period is in ms
+    testObservable = Observable('testObservable', lambda: random.randint(0,1000) < 1,\
+                   'something has happened', 'call me', 12345, event='random', reason='Dunno', led=led) #an observer with a random check
+    testTimer = TimerObservable('testTimer',period=1000, led=led); #period is in ms
+    testDebouncedWentTrue = DebouncedWentTrueObservable('testDebouncedWentTrue', debouncedPin=touchSwA0, led=led)
+
     observer1 = Observer('observer1', testObservable)
-    observer2 = Observer('observer2', testObservable)
+    observer2 = Observer('observer2', testDebouncedWentTrue)
     observer3 = Observer('observer3', testTimer)
 
-    observerList = [testObservable, testTimer]
+    observerableList = [testObservable, testDebouncedWentTrue, testTimer]
 
     #The forever loop. Causes observable to check their events and then notify their observers.
     while True:
-        for obs in observerList:
+        for obs in observerableList:
             res=obs.check() #ask this observable to check it event. This will cause a notify if it has happened
             if res and obs.name == 'testObservable':  #did testObservable happen?
                 if observer1 in testObservable._observers: #if so, remove observer1. He's finished now
