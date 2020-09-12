@@ -64,21 +64,21 @@ i.e. it remembers the last input and compares the current one
 and check() is true of input.value has just changed from False to True
 If the object is an instance of Debouncer it also does the Debouncer.update()
 """
-class DebouncedWentTrueObservable(Observable):
-    def __init__(self, name, debouncedPin=None, *args, **kwargs):
+class WentTrueObservable(Observable):
+    def __init__(self, name, inp=None, *args, **kwargs):
         super().__init__(name, *args, **kwargs)
-        self.debouncedPin = debouncedPin #period is in ms
-        print(self.name, 'debouncedPin=', self.debouncedPin)
-        if debouncedPin is not None:
-            self.lastPin = debouncedPin.value #remember what the pin was
+        self.inp = inp #period is in ms
+        print(self.name, 'inp=', self.inp)
+        if inp is not None:
+            self.lastPin = inp.value #remember what the pin was
 
     def check(self):  #
-        if self.debouncedPin is not None:
-            if isinstance(self.debouncedPin, Debouncer):
-                self.debouncedPin.update()    #need to do this for a debounced pin.
-            inp = self.debouncedPin.value #read the pin
-            res = inp and not self.lastPin  #in the pin now True but wasn't last time?
-            self.lastPin = inp #remeber of last time
+        if self.inp is not None:
+            if isinstance(self.inp, Debouncer):
+                self.inp.update()    #need to do this for a debounced pin.
+            inpV = self.inp.value #read the pin
+            res = inpV and not self.lastPin  #in the pin now True but wasn't last time?
+            self.lastPin = inpV #remember for next time
             if res:
                 self.notify()  #Tell all your observers
                 return True    #return result
@@ -107,13 +107,13 @@ def demoLoop():
     testObservable = Observable('testObservable', lambda: random.randint(0,1000) < 1,\
                    'something has happened', 'call me', 12345, event='random', reason='Dunno', led=led) #an observer with a random check
     testTimer = TimerObservable('testTimer',period=1000, led=led); #period is in ms
-    testDebouncedWentTrue = DebouncedWentTrueObservable('testDebouncedWentTrue', debouncedPin=touchSwA0, led=led)
+    testWentTrue = WentTrueObservable('testWentTrue', inp=touchSwA0, led=led)
 
     observer1 = Observer('observer1', testObservable)
-    observer2 = Observer('observer2', testDebouncedWentTrue)
+    observer2 = Observer('observer2', testWentTrue)
     observer3 = Observer('observer3', testTimer)
 
-    observerableList = [testObservable, testDebouncedWentTrue, testTimer]
+    observerableList = [testObservable, testWentTrue, testTimer]
 
     #The forever loop. Causes observable to check their events and then notify their observers.
     while True:
