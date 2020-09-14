@@ -10,3 +10,5 @@ The observerPattern.py defines classes for observables that check for events by 
 There can be many types of observables. Two given in the examples code are a periodic  timer and one that gets a lambda function as its check(). Others that might be a added are one-shot timer and one to check digital input pins.
 
 The demoObserverPattern.py implements a 'while True:' loop that instantiates a list of observables and associated observers and calls the 'check()' on each observable in the list without need for a time.sleep() to slow things down. If the check() in each observable is True, the observable instance handles notifying each observer that is registered with it and the observer instances decide what to do about it.
+
+14-Sept-2020 I added the event classes to more easily encapsulate event checkable objects and the checkFunc() and keep some state such as lastValue and timestamp of last time the event happened.
